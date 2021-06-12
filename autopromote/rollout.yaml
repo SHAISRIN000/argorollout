@@ -1,0 +1,63 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Rollout
+metadata:
+  name: detail
+spec:
+  replicas: 5
+  strategy:
+    canary:
+      canaryService: detail-canary
+      stableService: detail-stable
+      trafficRouting:
+        alb:
+          ingress: detail-ingress
+          servicePort: 80
+          rootService: detail-root
+      steps:
+      - setWeight: 20
+      - pause: {duration: 1}
+      - setWeight: 40
+      - pause: {duration: 1}
+      - setWeight: 60
+      - pause: {duration: 1}
+      - setWeight: 80
+      - pause: {}
+  revisionHistoryLimit: 2
+  selector:
+    matchLabels:
+      app: detail
+  template:
+    metadata:
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "9797"
+      labels:
+        app: detail
+    spec:
+      containers:
+      - name: detail
+        image: public.ecr.aws/u2g6w7p2/eks-microservice-demo/detail:1.0
+        ports:
+        - name: http
+          containerPort: 3000
+          protocol: TCP
+        - name: http-metrics
+          containerPort: 9797
+          protocol: TCP
+        livenessProbe:
+          httpGet:
+            path: /ping
+            port: 3000
+          initialDelaySeconds: 0
+          periodSeconds: 10
+          timeoutSeconds: 1
+          failureThreshold: 3
+        readinessProbe:
+          httpGet:
+            path: /ping
+            port: 3000
+          successThreshold: 3
+        resources:
+          requests:
+            cpu: 100m
+            memory: 64Mi
